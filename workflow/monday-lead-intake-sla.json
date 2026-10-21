@@ -1,0 +1,1776 @@
+{
+  "name": "Monday.com Lead Intake with Dedupe, Round Robin and SLA Nudges",
+  "nodes": [
+    {
+      "id": "7647a1ca-3efb-5fba-b00f-16be761b9e75",
+      "name": "Note: Security",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        140
+      ],
+      "parameters": {
+        "content": "## 1. Security\nThe form sends the shared secret in the X-Webhook-Secret header (or as ?key= in the URL if it cannot set headers). Anything else gets a 401 and raises an alert.",
+        "width": 700,
+        "height": 520,
+        "color": 3
+      }
+    },
+    {
+      "id": "60fefbb5-11b0-5cc9-895a-995220959042",
+      "name": "Note: Clean",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        640,
+        140
+      ],
+      "parameters": {
+        "content": "## 2. Clean and dedupe\nEmail in lowercase, phone in E.164. Bad posts get a 422. A repeat delivery of the same submission gets a 200 and is skipped.",
+        "width": 920,
+        "height": 520,
+        "color": 4
+      }
+    },
+    {
+      "id": "4e9a85b7-1261-5707-9aee-7ae6f9b8fb2b",
+      "name": "Note: Monday",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1580,
+        140
+      ],
+      "parameters": {
+        "content": "## 3. Find or create in Monday\nSearches the board by email and by phone. A known lead gets an update with the new inquiry and a field refresh. A new lead is created with status New and the next owner in the rotation. If Monday refuses only the phone number or email, the lead is saved without it. If Monday fails, the form gets a 503 so it can retry, and you get an alert with the lead.",
+        "width": 2860,
+        "height": 940,
+        "color": 6
+      }
+    },
+    {
+      "id": "8a231131-afd4-5823-a9af-9564da9ebc2a",
+      "name": "Note: Owner",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4460,
+        140
+      ],
+      "parameters": {
+        "content": "## 4. Tell the owner\nThe form gets its answer first. Then the delivery is remembered and the owner gets a Slack message with a link to the item.",
+        "width": 920,
+        "height": 520,
+        "color": 5
+      }
+    },
+    {
+      "id": "9023c9b8-14c9-5140-9297-c6a2881058e4",
+      "name": "Note: Triggers",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        1240
+      ],
+      "parameters": {
+        "content": "## 5. SLA check\nRuns every 30 minutes. Run Now does the same on demand and needs the X-Run-Secret header.",
+        "width": 700,
+        "height": 760,
+        "color": 7
+      }
+    },
+    {
+      "id": "b60764db-d373-57e1-9c54-4c041bf9b1ff",
+      "name": "Note: Overdue",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        640,
+        1240
+      ],
+      "parameters": {
+        "content": "## 6. Find overdue leads\nReads every item still in status New, page by page, and decides who needs a reminder.",
+        "width": 1140,
+        "height": 760,
+        "color": 6
+      }
+    },
+    {
+      "id": "3fd96a94-918b-586c-b32a-c740ce3f3cfd",
+      "name": "Note: Nudge",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        1240
+      ],
+      "parameters": {
+        "content": "## 7. Nudge and escalate\nOne Slack message per person, sent one at a time so a retry never repeats a message that already went out. Only accepted messages are remembered.",
+        "width": 760,
+        "height": 760,
+        "color": 5
+      }
+    },
+    {
+      "id": "3dfec728-2a22-560a-a650-1d2e9707a04d",
+      "name": "Lead Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "monday-lead-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "7bfe5fff-9566-5ccc-a378-55645b69e117"
+    },
+    {
+      "id": "999faf1c-6f8a-5190-970f-ac82bb9396c5",
+      "name": "Secret Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "86f9ff3c-19f5-568b-9cef-b5fe865ceded",
+              "leftValue": "={{ $env.LEAD_WEBHOOK_SECRET }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "4a9b01b2-aca9-5da7-91be-aed84996a127",
+              "leftValue": "={{ [$json.headers['x-webhook-secret'], $json.query?.key].includes($env.LEAD_WEBHOOK_SECRET) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "21dc4e61-3985-5974-8fb7-b188f07e75ce",
+      "name": "Respond: Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        520
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: \"unauthorized\" }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      }
+    },
+    {
+      "id": "27e82ca5-b059-5f4c-ae40-a0f1aef6907a",
+      "name": "Stop: Bad Secret",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        440,
+        520
+      ],
+      "parameters": {
+        "errorMessage": "Lead webhook rejected: the X-Webhook-Secret header (or ?key= in the URL) is missing or wrong. If real form posts land here, check LEAD_WEBHOOK_SECRET and what your form sends."
+      }
+    },
+    {
+      "id": "d8d50c9b-3a28-5a44-a63a-7bb2cef3c5b7",
+      "name": "Normalize Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Reads the form post, cleans it, checks the config and builds the Monday search.\n// Nothing is written here: static data is only read. \"Remember Lead\" writes it once Monday has the lead,\n// and \"Note Failed Try\" when Monday refused it.\n// This node must never throw. n8n would then answer the form with an empty 200, and the form would think it worked.\nconst store = $getWorkflowStaticData('global');\nconst DEDUPE_HOURS = 24;\nconst str = v => String(v ?? '').trim();\n\n// ---- Config ----\nconst cfg = {\n  board: str($env.MONDAY_BOARD_ID),\n  group: str($env.MONDAY_GROUP_ID),\n  newLabel: str($env.MONDAY_STATUS_NEW_LABEL) || 'New',\n  country: (str($env.DEFAULT_COUNTRY) || 'US').toUpperCase(),\n  col: {\n    email: str($env.MONDAY_COL_EMAIL), phone: str($env.MONDAY_COL_PHONE), status: str($env.MONDAY_COL_STATUS),\n    owner: str($env.MONDAY_COL_OWNER), message: str($env.MONDAY_COL_MESSAGE),\n    company: str($env.MONDAY_COL_COMPANY), source: str($env.MONDAY_COL_SOURCE), lastInquiry: str($env.MONDAY_COL_LAST_INQUIRY),\n  },\n  owners: [],\n};\nconst problems = [];\nif (!str($env.MONDAY_API_TOKEN)) problems.push('MONDAY_API_TOKEN is empty');\nif (!/^\\d+$/.test(cfg.board)) problems.push('MONDAY_BOARD_ID must be the numeric board ID');\nfor (const [key, envName] of [['email', 'EMAIL'], ['phone', 'PHONE'], ['status', 'STATUS'], ['owner', 'OWNER'], ['message', 'MESSAGE']]) {\n  if (!cfg.col[key]) problems.push(`MONDAY_COL_${envName} is empty`);\n}\nlet owners = null;\ntry { owners = JSON.parse(str($env.OWNERS_JSON) || '[]'); } catch (e) { problems.push('OWNERS_JSON is not valid JSON'); }\nif (owners && (!Array.isArray(owners) || !owners.length || owners.some(o => !o || !/^\\d+$/.test(str(o.mondayUserId))))) {\n  problems.push('OWNERS_JSON must be a list of owners, each with a numeric mondayUserId');\n} else if (owners) {\n  cfg.owners = owners.map(o => ({\n    name: str(o.name) || `User ${o.mondayUserId}`, mondayUserId: str(o.mondayUserId),\n    slackMemberId: str(o.slackMemberId), slackWebhookUrl: str(o.slackWebhookUrl), away: o.away === true,\n  }));\n}\n\n// Calling codes for the countries this workflow can store in a Monday phone column.\nconst CALLING = { US: '1', CA: '1', GB: '44', IE: '353', AU: '61', NZ: '64', PH: '63', SG: '65', IN: '91', ZA: '27',\n  AE: '971', DE: '49', FR: '33', ES: '34', IT: '39', NL: '31', MX: '52', BR: '55' };\n\n// Turns what people type (\"(202) 555-0101\", \"+44 7700 900123\", \"0044...\") into E.164 (\"+12025550101\").\n// Local numbers without a country code use the given country. Returns '' when it is not a usable number.\nfunction toE164(raw, country) {\n  let s = String(raw || '').trim().replace(/\\s*(ext\\.?|x|#)\\s*\\d+$/i, '');\n  let digits = s.replace(/\\D/g, '');\n  if (!digits) return '';\n  let e164;\n  if (s.startsWith('+')) e164 = digits;\n  else if (digits.startsWith('00')) e164 = digits.slice(2);\n  else {\n    const cc = CALLING[String(country || '').toUpperCase()];\n    if (!cc) return '';\n    if (cc === '1') {\n      if (digits.length === 11 && digits.startsWith('1')) e164 = digits;\n      else if (digits.length === 10) e164 = '1' + digits;\n      else return '';\n    } else {\n      if (digits.startsWith('0')) digits = digits.slice(1); // national trunk prefix\n      e164 = digits.startsWith(cc) && digits.length >= cc.length + 9 ? digits : cc + digits;\n    }\n  }\n  if (e164.length < 8 || e164.length > 15 || e164.startsWith('0')) return '';\n  if (e164.startsWith('1') && e164.length !== 11) return ''; // +1 numbers always have 10 digits after the 1\n  return '+' + e164;\n}\n\nif (!CALLING[cfg.country]) problems.push(`DEFAULT_COUNTRY must be one of ${Object.keys(CALLING).join(', ')}`);\n\n// Which country a +E.164 number belongs to, for the phone column's countryShortName. US and CA share +1,\n// so the default country wins when it matches. Returns '' for countries not in the list above.\nfunction countryOf(e164) {\n  const d = e164.slice(1);\n  if (CALLING[cfg.country] && d.startsWith(CALLING[cfg.country])) return cfg.country;\n  for (const len of [3, 2, 1]) {\n    const hit = Object.keys(CALLING).find(k => CALLING[k] === d.slice(0, len));\n    if (hit) return hit;\n  }\n  return '';\n}\n\n// A short stable hash (cyrb53), used for the dedupe key and Monday's Idempotency-Key.\nfunction hash(text) {\n  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;\n  for (let i = 0; i < text.length; i++) {\n    const ch = text.charCodeAt(i);\n    h1 = Math.imul(h1 ^ ch, 2654435761);\n    h2 = Math.imul(h2 ^ ch, 1597334677);\n  }\n  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);\n  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);\n  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);\n}\n\n// ---- The form fields (common names from website forms are accepted) ----\nconst raw = $input.first().json.body;\nconst b = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};\nconst field = (...keys) => {\n  for (const k of keys) {\n    const v = b[k];\n    if (v !== undefined && v !== null && typeof v !== 'object' && str(v)) return String(v);\n  }\n  return '';\n};\nconst tidy = (s, max) => String(s).replace(/\\r\\n?/g, '\\n').replace(/[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]/g, '')\n  .replace(/[ \\t]+/g, ' ').replace(/\\n{3,}/g, '\\n\\n').trim().slice(0, max);\n\nconst name = tidy(field('name', 'full_name', 'fullName') || `${field('first_name', 'firstName')} ${field('last_name', 'lastName')}`, 120);\nconst emailRaw = tidy(field('email', 'Email', 'email_address', 'emailAddress'), 254).replace(/\\s/g, '');\nconst email = emailRaw.toLowerCase();\nconst phoneRaw = tidy(field('phone', 'Phone', 'phone_number', 'phoneNumber', 'tel'), 40);\nconst company = tidy(field('company', 'Company', 'company_name', 'business'), 120);\nconst message = tidy(field('message', 'Message', 'comments', 'details', 'inquiry'), 5000);\nconst source = tidy(field('source', 'form_name', 'formName', 'utm_source'), 80) || 'Website form';\nconst submissionId = tidy(field('submissionId', 'submission_id', 'entry_id', 'entryId', 'event_id'), 120);\n\nconst errors = [];\nconst EMAIL_RE = /^[^\\s@<>()[\\]\\\\,;:\"']+@[a-z0-9-]+(\\.[a-z0-9-]+)*\\.[a-z]{2,}$/;\nconst emailOk = Boolean(email) && EMAIL_RE.test(email) && !email.includes('..');\nif (email && !emailOk) errors.push('email is not a valid address');\nconst phone = phoneRaw ? toE164(phoneRaw, cfg.country) : '';\nif (phoneRaw && !phone) errors.push('phone is not a full phone number');\nconst phoneCountry = phone ? countryOf(phone) : '';\nconst valid = Boolean((emailOk ? email : '') || phone);\nif (!valid && !email && !phoneRaw) errors.push('an email or a phone number is required');\n\nconst lead = {\n  name, email: emailOk ? email : '', emailTyped: emailOk ? emailRaw : '', phone, phoneCountry, phoneInput: phoneRaw,\n  phoneTyped: phone ? '' : phoneRaw, badEmail: emailOk ? '' : emailRaw, company, message, source, submissionId,\n  itemName: (name || (emailOk ? email : '') || phone || 'Website lead').slice(0, 255),\n  receivedAt: new Date().toISOString(),\n};\n// What the alert shows when the lead could not be saved, so it can be entered by hand.\nconst forAlert = Object.fromEntries(Object.entries({\n  name, email: lead.email || lead.badEmail, phone: phoneRaw, company, source, submissionId, message,\n}).filter(([, v]) => v));\n\n// Same submission ID, or the same email, phone and message, within DEDUPE_HOURS counts as a repeat delivery.\nconst fingerprint = submissionId ? `sub:${submissionId}` : `msg:${lead.email}|${lead.phone}|${message.toLowerCase().replace(/\\s+/g, ' ')}`;\nconst key = 'lead-' + hash(fingerprint);\nconst seen = (store.leads || {})[key];\nconst duplicate = Boolean(seen && Date.now() - Date.parse(seen.at) < DEDUPE_HOURS * 3600e3);\n// Monday's Idempotency-Key is built from the submission, so a repeat delivery that arrives while the first one\n// is still running gets Monday's first answer instead of a second item. \"attempt\" only changes after Monday has\n// refused this submission with an answer, because Monday may keep that answer under the old key for 30 minutes.\nconst attempt = Number(((store.failed || {})[key] || {}).n) || 0;\n\n// ---- The Monday search: one request, one items_page_by_column_values lookup per identifier ----\n// Email: Monday matches the whole display text, so both the lowercase address and the address as typed are sent.\n// Phone: Monday wants digits only and does a \"contains\" match, so \"Match Lead\" checks every hit exactly.\nconst defs = ['$board: ID!', '$cols: [String!]'];\nconst vars = { board: cfg.board, cols: [cfg.col.email, cfg.col.phone, cfg.col.status, cfg.col.owner, cfg.col.company].filter(Boolean) };\nconst parts = [];\nconst FIELDS = 'items { id name url created_at column_values(ids: $cols) { id text value } }';\nif (lead.email) {\n  defs.push('$emailCol: String!', '$emails: [String]!');\n  Object.assign(vars, { emailCol: cfg.col.email, emails: [...new Set([lead.email, lead.emailTyped])] });\n  parts.push(`by_email: items_page_by_column_values(board_id: $board, limit: 25, columns: [{column_id: $emailCol, column_values: $emails}]) { ${FIELDS} }`);\n}\nif (lead.phone) {\n  const cc = CALLING[cfg.country];\n  const digits = lead.phone.slice(1);\n  // Numbers from the home country are searched without the country code, so items typed as \"5552010101\" match too.\n  const needle = cc && phoneCountry === cfg.country && digits.startsWith(cc) ? digits.slice(cc.length) : digits;\n  defs.push('$phoneCol: String!', '$phones: [String]!');\n  Object.assign(vars, { phoneCol: cfg.col.phone, phones: [needle] });\n  parts.push(`by_phone: items_page_by_column_values(board_id: $board, limit: 25, columns: [{column_id: $phoneCol, column_values: $phones}]) { ${FIELDS} }`);\n}\n\nreturn [{\n  json: {\n    configOk: !problems.length,\n    error: problems.length ? `Config problem: ${problems.join('; ')}` : '',\n    valid, errors, duplicate, duplicateOf: duplicate ? seen.itemId : '',\n    key, attempt, cfg, lead, forAlert,\n    request: parts.length ? { query: `query FindLead(${defs.join(', ')}) { ${parts.join(' ')} }`, variables: vars } : null,\n  },\n  pairedItem: { item: 0 },\n}];\n"
+      }
+    },
+    {
+      "id": "c7573ee3-ed41-5900-9f7e-0af516aed025",
+      "name": "Config OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        940,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "aa0fcaa8-ca88-5442-adf2-340af1011114",
+              "leftValue": "={{ $json.configOk }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5d26cc6-72f2-58d0-b124-e0a0ba28c7ee",
+      "name": "Lead Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "e163ca95-7d87-5130-8d9a-401cf44ac677",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e2d2ef7f-8d69-58c5-8293-9e878f1becfa",
+      "name": "Respond: Invalid Lead",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1160,
+        520
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: \"invalid_lead\", details: $json.errors }) }}",
+        "options": {
+          "responseCode": 422
+        }
+      }
+    },
+    {
+      "id": "7a12d585-7ce7-5386-aacd-5ca6875119c8",
+      "name": "New Submission?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1380,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "f15e7bfd-006e-5b4b-8750-a9fda98a9061",
+              "leftValue": "={{ $json.duplicate }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "5c71af6a-bf81-53e9-8fc8-d2b2908147bc",
+      "name": "Respond: Duplicate",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1380,
+        520
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, status: \"duplicate\", itemId: $json.duplicateOf }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "7c3060c6-1052-5674-ba25-c8160fbfa57c",
+      "name": "Monday: Find Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1660,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.monday.com/v2",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.MONDAY_API_TOKEN }}"
+            },
+            {
+              "name": "API-Version",
+              "value": "={{ $env.MONDAY_API_VERSION || '2026-10' }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "d1360764-c41d-5316-915c-209eddc6d249",
+      "name": "Match Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1880,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Monday answers GraphQL errors with HTTP 200, so the body is checked here, not by the HTTP node.\n// Phone hits come from a \"contains\" search, so every hit is normalised and compared exactly.\nconst res = $input.first().json;\nconst { cfg, lead } = $('Normalize Lead').first().json;\nconst describe = errs => errs.map(e => `${e.extensions?.code || 'error'}: ${e.message}`).join('; ').slice(0, 500);\nif (Array.isArray(res.errors) && res.errors.length) {\n  return [{ json: { ok: false, error: `Monday search failed: ${describe(res.errors)}` }, pairedItem: { item: 0 } }];\n}\nif (!res.data) return [{ json: { ok: false, error: 'Monday search returned no data' }, pairedItem: { item: 0 } }];\n\n// Calling codes for the countries this workflow can store in a Monday phone column.\nconst CALLING = { US: '1', CA: '1', GB: '44', IE: '353', AU: '61', NZ: '64', PH: '63', SG: '65', IN: '91', ZA: '27',\n  AE: '971', DE: '49', FR: '33', ES: '34', IT: '39', NL: '31', MX: '52', BR: '55' };\n\n// Turns what people type (\"(202) 555-0101\", \"+44 7700 900123\", \"0044...\") into E.164 (\"+12025550101\").\n// Local numbers without a country code use the given country. Returns '' when it is not a usable number.\nfunction toE164(raw, country) {\n  let s = String(raw || '').trim().replace(/\\s*(ext\\.?|x|#)\\s*\\d+$/i, '');\n  let digits = s.replace(/\\D/g, '');\n  if (!digits) return '';\n  let e164;\n  if (s.startsWith('+')) e164 = digits;\n  else if (digits.startsWith('00')) e164 = digits.slice(2);\n  else {\n    const cc = CALLING[String(country || '').toUpperCase()];\n    if (!cc) return '';\n    if (cc === '1') {\n      if (digits.length === 11 && digits.startsWith('1')) e164 = digits;\n      else if (digits.length === 10) e164 = '1' + digits;\n      else return '';\n    } else {\n      if (digits.startsWith('0')) digits = digits.slice(1); // national trunk prefix\n      e164 = digits.startsWith(cc) && digits.length >= cc.length + 9 ? digits : cc + digits;\n    }\n  }\n  if (e164.length < 8 || e164.length > 15 || e164.startsWith('0')) return '';\n  if (e164.startsWith('1') && e164.length !== 11) return ''; // +1 numbers always have 10 digits after the 1\n  return '+' + e164;\n}\n\nconst parse = s => { try { return s ? JSON.parse(s) : null; } catch (e) { return null; } };\nconst read = it => {\n  const cv = Object.fromEntries((it.column_values || []).map(c => [c.id, c]));\n  const emailV = parse(cv[cfg.col.email]?.value);\n  const phoneV = parse(cv[cfg.col.phone]?.value);\n  const ownerV = parse(cv[cfg.col.owner]?.value);\n  return {\n    id: String(it.id), name: it.name, url: it.url, createdAt: it.created_at || '',\n    email: String(emailV?.email || '').trim().toLowerCase(), hasEmail: Boolean(emailV?.email),\n    phone: phoneV?.phone ? toE164(phoneV.phone, phoneV.countryShortName || cfg.country) : '', hasPhone: Boolean(phoneV?.phone),\n    status: cv[cfg.col.status]?.text || '',\n    hasCompany: Boolean(cfg.col.company && cv[cfg.col.company]?.text),\n    ownerIds: (ownerV?.personsAndTeams || []).filter(p => p.kind === 'person').map(p => String(p.id)),\n    ownerText: cv[cfg.col.owner]?.text || '',\n  };\n};\nconst byEmail = (res.data.by_email?.items || []).map(read).filter(it => lead.email && it.email === lead.email);\nconst byPhone = (res.data.by_phone?.items || []).map(read).filter(it => lead.phone && it.phone === lead.phone);\n// If the board already holds duplicates, the oldest item wins. Email is the stronger match.\nconst oldest = list => [...list].sort((a, b) => (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0) || Number(a.id) - Number(b.id))[0];\nconst match = oldest(byEmail) || oldest(byPhone) || null;\nconst others = [...new Set([...byEmail, ...byPhone].map(i => i.id))].filter(id => id !== match?.id);\n\nreturn [{\n  json: {\n    ok: true, found: Boolean(match), item: match,\n    matchedBy: !match ? '' : byEmail.some(i => i.id === match.id) ? 'email' : 'phone',\n    otherMatches: others,\n    hits: { email: (res.data.by_email?.items || []).length, phone: (res.data.by_phone?.items || []).length },\n  },\n  pairedItem: { item: 0 },\n}];\n"
+      }
+    },
+    {
+      "id": "f0484e27-f28b-599b-a42d-49d06acd925e",
+      "name": "Search OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2100,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "e70c7005-ad56-5a3b-862a-5caf1a5db770",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "4627cba1-8284-5140-9cb1-1486c7da3e0b",
+      "name": "Lead Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "ca21d125-374a-5ee2-830a-294d7d55dfc6",
+              "leftValue": "={{ $json.found }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "1be790f6-7367-56fe-91e0-4d6f14dfe9b5",
+      "name": "Build Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2540,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// The lead is already on the board: log the new inquiry as an update and refresh a few fields.\n// It never touches the owner, the status, the name or the first message, and only fills contact details that are empty.\nconst { cfg, lead, key, attempt } = $('Normalize Lead').first().json;\nconst { item } = $input.first().json;\nconst html = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\nconst now = lead.receivedAt;\n\nconst details = [\n  ['Name', lead.name], ['Email', lead.email || lead.badEmail], ['Phone', lead.phone || lead.phoneTyped], ['Company', lead.company],\n  ['Source', lead.source], ['Received', now.slice(0, 16).replace('T', ' ') + ' UTC'],\n].filter(([, v]) => v);\n// Update bodies are HTML, so everything the visitor typed is escaped.\nconst body = `<p><strong>New inquiry from the website:</strong> ${html(lead.message || '(no message)').replace(/\\n/g, '<br>')}</p>`\n  + `<p>${details.map(([k, v]) => `${k}: ${html(v)}`).join('<br>')}</p>`;\n\n// Two separate field changes: \"refresh\" (last inquiry, source) always applies, \"fill\" adds contact details the\n// item is missing. Monday checks phone numbers and emails itself, so if it refuses one, only \"fill\" fails.\nconst refresh = {};\nif (cfg.col.lastInquiry) refresh[cfg.col.lastInquiry] = { date: now.slice(0, 10), time: now.slice(11, 19) };\nif (cfg.col.source) refresh[cfg.col.source] = lead.source;\nconst fill = {};\nif (lead.email && !item.hasEmail) fill[cfg.col.email] = { email: lead.email, text: lead.email };\nif (lead.phone && lead.phoneCountry && !item.hasPhone) fill[cfg.col.phone] = { phone: lead.phone, countryShortName: lead.phoneCountry };\nif (cfg.col.company && lead.company && !item.hasCompany) fill[cfg.col.company] = lead.company;\n\nconst defs = ['$item: ID!', '$body: String!'];\nconst variables = { item: item.id, body };\nlet fields = 'update: create_update(item_id: $item, body: $body) { id }';\nif (Object.keys(refresh).length || Object.keys(fill).length) {\n  defs.push('$board: ID!');\n  variables.board = cfg.board;\n}\nif (Object.keys(refresh).length) {\n  defs.push('$refresh: JSON!');\n  variables.refresh = JSON.stringify(refresh); // column values go as a JSON string\n  fields += ' refresh: change_multiple_column_values(board_id: $board, item_id: $item, column_values: $refresh) { id }';\n}\nif (Object.keys(fill).length) {\n  defs.push('$fill: JSON!');\n  variables.fill = JSON.stringify(fill);\n  fields += ' fill: change_multiple_column_values(board_id: $board, item_id: $item, column_values: $fill) { id }';\n}\nreturn [{\n  json: {\n    request: { query: `mutation UpdateLead(${defs.join(', ')}) { ${fields} }`, variables },\n    // Built from the submission: n8n's own retries and a repeat delivery that arrives meanwhile get the same key,\n    // so Monday applies the update once and replays its answer.\n    idempotencyKey: `${key}-a${attempt}-update`,\n    refreshed: [...Object.keys(refresh), ...Object.keys(fill)],\n  },\n  pairedItem: { item: 0 },\n}];\n"
+      }
+    },
+    {
+      "id": "dfdfd5a3-cb9a-577c-8e5b-ba2665ed49d6",
+      "name": "Monday: Update Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2760,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.monday.com/v2",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.MONDAY_API_TOKEN }}"
+            },
+            {
+              "name": "API-Version",
+              "value": "={{ $env.MONDAY_API_VERSION || '2026-10' }}"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $json.idempotencyKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "07fea335-d2f1-5ab9-afc0-2de656a7b5b7",
+      "name": "Check Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2980,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// create_update and the field changes run in one request, and Monday answers with partial data. If the update is\n// saved, the inquiry is safe; a refused field change is passed on as a warning instead of failing the lead.\nconst res = $input.first().json;\nconst m = $('Match Lead').first().json;\nconst describe = errs => errs.map(e => `${e.extensions?.code || 'error'}: ${e.message}`).join('; ').slice(0, 500);\nconst errs = Array.isArray(res.errors) ? res.errors : [];\nif (!res.data?.update?.id) {\n  // refused: Monday answered, so the next try needs a new Idempotency-Key (see \"Note Failed Try\").\n  return [{ json: { ok: false, refused: errs.length > 0, error: `Monday did not save the update: ${describe(errs) || 'no update id returned'}` }, pairedItem: { item: 0 } }];\n}\nconst about = e => (e.path || [])[0] === 'fill' ? 'the missing contact details' : (e.path || [])[0] === 'refresh' ? 'the last inquiry and source' : 'some fields';\nreturn [{\n  json: {\n    ok: true, status: 'updated', itemId: m.item.id, itemName: m.item.name, itemUrl: m.item.url,\n    owner: null, ownerIds: m.item.ownerIds, ownerText: m.item.ownerText, matchedBy: m.matchedBy, otherMatches: m.otherMatches,\n    updateId: String(res.data.update.id),\n    warnings: errs.map(e => `Monday did not save ${about(e)}: ${describe([e])}`),\n  },\n  pairedItem: { item: 0 },\n}];\n"
+      }
+    },
+    {
+      "id": "16e654d5-13b3-5ddb-8adc-f728cfbd55a7",
+      "name": "Pick Owner",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2540,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// New lead: pick the next owner in OWNERS_JSON after the last one who got a lead, skipping anyone marked away.\n// The pointer is only moved in \"Remember Lead\", after Monday has created the item.\nconst store = $getWorkflowStaticData('global');\nconst { cfg, lead, key, attempt } = $('Normalize Lead').first().json;\nconst owners = cfg.owners;\nconst start = owners.findIndex(o => o.mondayUserId === String(store.roundRobin?.lastOwnerId || ''));\nlet owner = null;\nfor (let step = 1; step <= owners.length && !owner; step++) {\n  const o = owners[(start + step) % owners.length];\n  if (!o.away) owner = o;\n}\n\n// Anything the visitor typed that could not go into its column is kept in the message.\nconst extra = [];\nif (lead.badEmail) extra.push(`Email as typed: ${lead.badEmail}`);\nif (lead.phoneTyped) extra.push(`Phone as typed: ${lead.phoneTyped}`);\nif (lead.phone && !lead.phoneCountry) extra.push(`Phone: ${lead.phone}`);\nconst message = [lead.message, ...extra].filter(Boolean).join('\\n\\n');\n\n// Column values are sent as one JSON string, in the format each column type expects.\nconst values = { [cfg.col.status]: { label: cfg.newLabel } };\nif (lead.email) values[cfg.col.email] = { email: lead.email, text: lead.email };\nif (lead.phone && lead.phoneCountry) values[cfg.col.phone] = { phone: lead.phone, countryShortName: lead.phoneCountry };\nif (owner) values[cfg.col.owner] = { personsAndTeams: [{ id: Number(owner.mondayUserId), kind: 'person' }] };\nif (message) values[cfg.col.message] = { text: message.slice(0, 2000) };\nif (cfg.col.company && lead.company) values[cfg.col.company] = lead.company;\nif (cfg.col.source) values[cfg.col.source] = lead.source;\nif (cfg.col.lastInquiry) values[cfg.col.lastInquiry] = { date: lead.receivedAt.slice(0, 10), time: lead.receivedAt.slice(11, 19) };\n\n// group_id is only sent when MONDAY_GROUP_ID is set; without it Monday uses the board's top group.\nconst query = cfg.group\n  ? 'mutation CreateLead($board: ID!, $group: String!, $name: String!, $values: JSON!) { create_item(board_id: $board, group_id: $group, item_name: $name, column_values: $values) { id name url } }'\n  : 'mutation CreateLead($board: ID!, $name: String!, $values: JSON!) { create_item(board_id: $board, item_name: $name, column_values: $values) { id name url } }';\nconst variables = { board: cfg.board, name: lead.itemName, values: JSON.stringify(values) };\nif (cfg.group) variables.group = cfg.group;\nreturn [{\n  json: {\n    owner, values, message,\n    request: { query, variables },\n    // Built from the submission: n8n's own retries, a repeat delivery that arrives meanwhile and the form's retry\n    // after a lost answer all get the same key, so Monday creates one item and replays its answer.\n    idempotencyKey: `${key}-a${attempt}-create`,\n  },\n  pairedItem: { item: 0 },\n}];\n"
+      }
+    },
+    {
+      "id": "bde042d4-b224-5a2c-aa5a-5499a0317408",
+      "name": "Monday: Create Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2760,
+        520
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.monday.com/v2",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.MONDAY_API_TOKEN }}"
+            },
+            {
+              "name": "API-Version",
+              "value": "={{ $env.MONDAY_API_VERSION || '2026-10' }}"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $json.idempotencyKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "1842c05b-6a82-53b6-81ba-af24a237d50b",
+      "name": "Check Create",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2980,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// create_item either works completely or not at all (a bad column value fails the whole mutation).\n// Monday checks phone numbers with Google's libphonenumber and checks emails itself, so a number that looks fine\n// here (a typo, a made-up area code) can make Monday refuse the whole lead. In that case the lead is created again\n// without that column, with the number or address kept in the message, instead of being lost.\nconst res = $input.first().json;\nconst pick = $('Pick Owner').first().json;\nconst { cfg, lead } = $('Normalize Lead').first().json;\nconst owner = pick.owner;\nconst describe = errs => errs.map(e => `${e.extensions?.code || 'error'}: ${e.message}`).join('; ').slice(0, 500);\nconst errs = Array.isArray(res.errors) ? res.errors : [];\nconst created = res.data?.create_item;\nif (created?.id) {\n  return [{\n    json: {\n      ok: true, retry: false, status: 'created', itemId: String(created.id), itemName: created.name, itemUrl: created.url,\n      owner, ownerIds: owner ? [owner.mondayUserId] : [], ownerText: owner ? owner.name : '', matchedBy: '', otherMatches: [], warnings: [],\n    },\n    pairedItem: { item: 0 },\n  }];\n}\n\n// Which contact column did Monday refuse? Its errors name the column type (PhoneColumn, EmailColumn).\nconst refusedContact = e => {\n  if (e.extensions?.code !== 'ColumnValueException') return '';\n  const d = e.extensions?.error_data || {};\n  if (d.column_id && d.column_id === cfg.col.phone) return 'phone';\n  if (d.column_id && d.column_id === cfg.col.email) return 'email';\n  const type = String(d.column_type || '').toLowerCase();\n  return type.includes('phone') ? 'phone' : type.includes('email') ? 'email' : '';\n};\nconst kinds = errs.map(refusedContact);\nconst drop = [...new Set(kinds)].filter(k => k && pick.values[cfg.col[k]] !== undefined);\nif (errs.length && drop.length && !kinds.includes('')) {\n  const values = { ...pick.values };\n  const notes = drop.map(k => k === 'phone'\n    ? `Phone (Monday did not accept it): ${lead.phoneInput || lead.phone}`\n    : `Email (Monday did not accept it): ${lead.email}`);\n  for (const k of drop) delete values[cfg.col[k]];\n  const noteText = notes.join('\\n');\n  const text = pick.message ? `${pick.message.slice(0, 2000 - noteText.length - 2)}\\n\\n${noteText}` : noteText;\n  values[cfg.col.message] = { text: text.slice(0, 2000) };\n  const what = drop.map(k => k === 'phone' ? `phone number ${lead.phoneInput || lead.phone}` : `email ${lead.email}`).join(' and the ');\n  const them = drop.length > 1 ? 'them' : 'it';\n  return [{\n    json: {\n      ok: false, retry: true, drop,\n      warning: `Monday did not accept the ${what}, so the lead was saved without ${them}. You find ${them} in the message; please check with the lead.`,\n      request: { query: pick.request.query, variables: { ...pick.request.variables, values: JSON.stringify(values) } },\n      idempotencyKey: `${pick.idempotencyKey}-without-${drop.join('-')}`,\n    },\n    pairedItem: { item: 0 },\n  }];\n}\n// refused: Monday answered, so the next try needs a new Idempotency-Key (see \"Note Failed Try\").\nreturn [{ json: { ok: false, retry: false, refused: errs.length > 0, error: `Monday did not create the item: ${describe(errs) || 'no item id returned'}` }, pairedItem: { item: 0 } }];\n"
+      }
+    },
+    {
+      "id": "7dbd5034-9478-5311-bb3e-5a4ebda68117",
+      "name": "Contact Refused?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3200,
+        520
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "2a5093f9-608c-5648-b1bc-74bfcbaa6d19",
+              "leftValue": "={{ $json.retry }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c09c8160-e0ff-593b-a194-22b14680892b",
+      "name": "Monday: Retry Create",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3420,
+        720
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.monday.com/v2",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.MONDAY_API_TOKEN }}"
+            },
+            {
+              "name": "API-Version",
+              "value": "={{ $env.MONDAY_API_VERSION || '2026-10' }}"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $json.idempotencyKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "a33294b9-5cfe-5b46-9609-145e5ac24c47",
+      "name": "Check Retry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3640,
+        720
+      ],
+      "parameters": {
+        "jsCode": "// The second try, without the contact column Monday refused.\nconst res = $input.first().json;\nconst first = $('Check Create').first().json;\nconst { owner } = $('Pick Owner').first().json;\nconst describe = errs => errs.map(e => `${e.extensions?.code || 'error'}: ${e.message}`).join('; ').slice(0, 500);\nconst errs = Array.isArray(res.errors) ? res.errors : [];\nconst created = res.data?.create_item;\nif (!created?.id) {\n  return [{ json: { ok: false, refused: errs.length > 0, error: `Monday did not create the item, even without the ${first.drop.join(' and ')}: ${describe(errs) || 'no item id returned'}` }, pairedItem: { item: 0 } }];\n}\nreturn [{\n  json: {\n    ok: true, status: 'created', itemId: String(created.id), itemName: created.name, itemUrl: created.url,\n    owner, ownerIds: owner ? [owner.mondayUserId] : [], ownerText: owner ? owner.name : '', matchedBy: '', otherMatches: [],\n    warnings: [first.warning],\n  },\n  pairedItem: { item: 0 },\n}];\n"
+      }
+    },
+    {
+      "id": "e087b326-7a1e-534e-8bda-fe6e53116c1e",
+      "name": "Saved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3860,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "e70c7005-ad56-5a3b-862a-5caf1a5db770",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "73f46287-20ff-5307-bcdd-7f6ae5987eca",
+      "name": "Respond: Try Later",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3860,
+        920
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: \"not_saved\", retry: true }) }}",
+        "options": {
+          "responseCode": 503,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Retry-After",
+                "value": "60"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "8c044dbe-dc02-510d-b0f7-dfd852a8fb1c",
+      "name": "Note Failed Try",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4080,
+        920
+      ],
+      "parameters": {
+        "jsCode": "// The form was told to retry. If Monday refused this lead with an answer (HTTP 200 with errors), Monday may keep\n// that answer under the Idempotency-Key for 30 minutes, so the next try of the same submission must use a new key.\n// Network errors, 5xx and 429 keep the key: Monday does not keep those, and if it did save the lead after all,\n// the retry gets that same item back instead of a second one.\nconst store = $getWorkflowStaticData('global');\nconst items = $input.all();\nconst { key } = $('Normalize Lead').first().json;\nif (items.some(it => it.json.refused === true)) {\n  store.failed = store.failed || {};\n  store.failed[key] = { n: ((store.failed[key] || {}).n || 0) + 1, at: new Date().toISOString() };\n}\nreturn items.map((it, i) => ({ json: it.json, pairedItem: { item: i } }));\n"
+      }
+    },
+    {
+      "id": "0777a74e-237e-57ee-9050-727cc63cafbc",
+      "name": "Stop: Lead Not Saved",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        4300,
+        920
+      ],
+      "parameters": {
+        "errorMessage": "={{ 'Lead NOT saved to Monday, so the form was told to retry (503). Reason: ' + (typeof $json.error === 'string' ? $json.error : ($json.error?.message || 'Unknown error')) + ' | Lead: ' + JSON.stringify($('Normalize Lead').first().json.forAlert) }}"
+      }
+    },
+    {
+      "id": "843ccd33-034b-59a6-b6e4-d4f1f3dcf1f8",
+      "name": "Respond: Saved",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        4540,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, status: $json.status, itemId: $json.itemId }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "f57c30d2-e8f0-54f3-add7-d071f2123f67",
+      "name": "Remember Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4760,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Monday has the lead, so this delivery is remembered (repeat deliveries are skipped for 24 hours)\n// and, for a new item, the round robin pointer moves to the owner who got it.\nconst store = $getWorkflowStaticData('global');\nconst r = $input.first().json;\nconst { key } = $('Normalize Lead').first().json;\nconst now = new Date().toISOString();\nconst old = v => Date.now() - Date.parse(v.at) > 24 * 3600e3;\nstore.leads = store.leads || {};\nfor (const [k, v] of Object.entries(store.leads)) if (old(v)) delete store.leads[k];\nstore.leads[key] = { itemId: r.itemId, at: now };\nif (store.failed) {\n  delete store.failed[key];\n  for (const [k, v] of Object.entries(store.failed)) if (old(v)) delete store.failed[k];\n}\nif (r.status === 'created' && r.owner) store.roundRobin = { lastOwnerId: r.owner.mondayUserId, at: now };\nreturn [{ json: r, pairedItem: { item: 0 } }];\n"
+      }
+    },
+    {
+      "id": "7c069686-4f37-5077-8d65-1e99e9d66ebb",
+      "name": "Build Owner Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4980,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// The Slack message for the owner: their own webhook if OWNERS_JSON has one, otherwise the team channel with a mention.\nconst r = $input.first().json;\nconst { cfg, lead } = $('Normalize Lead').first().json;\nconst team = String($env.SLACK_WEBHOOK_URL || '').trim();\nconst esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); // visitor text cannot ping @channel\nconst owner = r.owner || cfg.owners.find(o => (r.ownerIds || []).includes(o.mondayUserId)) || null;\nconst who = owner ? (owner.slackMemberId ? `<@${owner.slackMemberId}>` : esc(owner.name)) : '';\nconst label = esc(lead.name || lead.email || lead.phone);\n\nlet headline;\nif (r.status === 'created') {\n  headline = owner ? `${who} New lead for you: *${label}*`\n    : `*New lead with no owner:* *${label}*. Everyone in OWNERS_JSON is marked away, so please assign it by hand.`;\n} else {\n  headline = owner ? `${who} Returning lead: *${label}* sent a new inquiry (matched by ${r.matchedBy}).`\n    : `*Returning lead:* *${label}* sent a new inquiry (matched by ${r.matchedBy}). Owner on the item: ${esc(r.ownerText) || 'nobody'}.`;\n}\nconst lines = [headline];\nif (lead.company) lines.push(`Company: ${esc(lead.company)}`);\nif (lead.email) lines.push(`Email: ${esc(lead.email)}`);\nif (lead.phone || lead.phoneTyped) lines.push(`Phone: ${esc(lead.phone || lead.phoneTyped)}`);\nlines.push(`Source: ${esc(lead.source)}`);\nif (lead.message) lines.push(`Message: ${esc(lead.message.length > 500 ? lead.message.slice(0, 500) + '...' : lead.message)}`);\nif (r.otherMatches?.length) lines.push(`Heads up: ${r.otherMatches.length} more item(s) on the board have this email or phone.`);\nfor (const w of r.warnings || []) lines.push(esc(w));\nlines.push(`<${r.itemUrl}|Open in Monday>`);\n\nconst webhookUrl = owner?.slackWebhookUrl || team;\nif (!webhookUrl) return []; // no Slack configured: the lead is saved, nothing else to do\nreturn [{ json: { webhookUrl, text: lines.join('\\n'), itemId: r.itemId }, pairedItem: { item: 0 } }];\n"
+      }
+    },
+    {
+      "id": "9c726bca-b76d-5041-ae3a-463dbf55fbc3",
+      "name": "Slack: Notify Owner",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5200,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.webhookUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "ea784f1b-2e3a-5f20-975e-4c86d3c5d1db",
+      "name": "Stop: Notify Failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        5200,
+        520
+      ],
+      "parameters": {
+        "errorMessage": "={{ 'The lead is saved in Monday (item ' + $('Build Owner Alert').first().json.itemId + ') but Slack refused the owner alert: ' + ($json.error?.message || 'Unknown error') + '. Check SLACK_WEBHOOK_URL and the slackWebhookUrl values in OWNERS_JSON. The SLA check will still nudge the owner.' }}"
+      }
+    },
+    {
+      "id": "0383ba8e-a2fa-56f9-aff6-65884ab942b5",
+      "name": "Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1400
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c565bca7-74a3-51d3-90d1-3860bd45c167",
+      "name": "Run Now",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1620
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "monday-lead-sla-run",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "5e003fe5-1875-585d-a5c7-28f2a1b4caa7"
+    },
+    {
+      "id": "da51c931-1817-51dd-9470-76a653f9aea4",
+      "name": "Run Secret Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        220,
+        1620
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "b205cfe5-1332-53e9-a332-3f510dd8fd8a",
+              "leftValue": "={{ $env.RUN_NOW_SECRET }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "6a97c54f-4b69-5a8a-9b4c-85a196234845",
+              "leftValue": "={{ $json.headers['x-run-secret'] }}",
+              "rightValue": "={{ $env.RUN_NOW_SECRET }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a9e9db2b-c49e-587c-ba8b-737bb25eb729",
+      "name": "Respond: Run Started",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        1620
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, started: true }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      }
+    },
+    {
+      "id": "58cdd368-88a5-5f6f-b544-80d2d596e0d3",
+      "name": "Respond: Run Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        1820
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: \"unauthorized\" }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      }
+    },
+    {
+      "id": "af33c4ca-bdb2-5cdf-97f4-812ffa7d2404",
+      "name": "Stop: Bad Run Secret",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        440,
+        1820
+      ],
+      "parameters": {
+        "errorMessage": "Run Now rejected: the X-Run-Secret header is missing or wrong. Check RUN_NOW_SECRET."
+      }
+    },
+    {
+      "id": "35fe6c54-6304-509c-8eb7-dd6cce47c415",
+      "name": "Start SLA Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        1400
+      ],
+      "parameters": {
+        "jsCode": "// Both triggers start here: the 30 minute schedule and the protected Run Now webhook.\nconst str = v => String(v ?? '').trim();\nconst problems = [];\nlet owners = null;\ntry { owners = JSON.parse(str($env.OWNERS_JSON) || '[]'); } catch (e) { problems.push('OWNERS_JSON is not valid JSON'); }\nif (!Array.isArray(owners)) { owners = []; problems.push('OWNERS_JSON must be a list'); }\nconst cfg = {\n  board: str($env.MONDAY_BOARD_ID),\n  newLabel: str($env.MONDAY_STATUS_NEW_LABEL) || 'New',\n  slaHours: Number($env.SLA_HOURS) > 0 ? Number($env.SLA_HOURS) : 2,\n  col: { status: str($env.MONDAY_COL_STATUS), owner: str($env.MONDAY_COL_OWNER) },\n  owners: owners.filter(o => o && str(o.mondayUserId)).map(o => ({\n    name: str(o.name) || `User ${o.mondayUserId}`, mondayUserId: str(o.mondayUserId),\n    slackMemberId: str(o.slackMemberId), slackWebhookUrl: str(o.slackWebhookUrl), away: o.away === true,\n  })),\n  team: str($env.SLACK_WEBHOOK_URL),\n  managerId: str($env.MANAGER_SLACK_ID),\n  managerHook: str($env.MANAGER_SLACK_WEBHOOK_URL) || str($env.SLACK_WEBHOOK_URL),\n  pageSize: 100,\n  maxPages: 50,\n};\nif (!str($env.MONDAY_API_TOKEN)) problems.push('MONDAY_API_TOKEN is empty');\nif (!/^\\d+$/.test(cfg.board)) problems.push('MONDAY_BOARD_ID must be the numeric board ID');\nif (!cfg.col.status || !cfg.col.owner) problems.push('MONDAY_COL_STATUS and MONDAY_COL_OWNER are required');\nif (!cfg.team) problems.push('SLACK_WEBHOOK_URL is required for SLA alerts');\n// Nobody is waiting on a reply here, so a config problem simply fails the run and the error workflow reports it.\n// (n8n cuts a thrown message at \": \", so the message avoids that pattern.)\nif (problems.length) throw new Error(`SLA check config problem. ${problems.join('; ')}`);\n\nreturn [{\n  json: {\n    cfg, page: 0, items: [],\n    request: {\n      query: 'query NewLeads($board: ID!, $statusCol: String!, $labels: [String]!, $cols: [String!], $limit: Int!) { items_page_by_column_values(board_id: $board, limit: $limit, columns: [{column_id: $statusCol, column_values: $labels}]) { cursor items { id name url created_at column_values(ids: $cols) { id text value } } } }',\n      variables: { board: cfg.board, statusCol: cfg.col.status, labels: [cfg.newLabel], cols: [cfg.col.status, cfg.col.owner], limit: cfg.pageSize },\n    },\n  },\n  pairedItem: { item: 0 },\n}];\n"
+      }
+    },
+    {
+      "id": "867e4657-5066-5367-8faa-b1fc07c2b527",
+      "name": "Monday: Get New Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        940,
+        1400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.monday.com/v2",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.MONDAY_API_TOKEN }}"
+            },
+            {
+              "name": "API-Version",
+              "value": "={{ $env.MONDAY_API_VERSION || '2026-10' }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "e860a0ef-7249-5600-acba-aca3ba6b4211",
+      "name": "Stop: SLA Query Failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        940,
+        1620
+      ],
+      "parameters": {
+        "errorMessage": "={{ 'The SLA check could not read the board: ' + ($json.error?.message || 'Unknown error') + '. No reminders were sent; the next run tries again.' }}"
+      }
+    },
+    {
+      "id": "76221594-a288-5f09-aa0a-cf93ad5c3328",
+      "name": "Collect Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        1400
+      ],
+      "parameters": {
+        "jsCode": "// Adds this page of New items to the list and prepares the next page. The HTTP node's output replaces $json,\n// so the list so far comes from the last \"More Pages?\" run (or from \"Start SLA Check\" on the first page).\nconst res = $input.first().json;\nconst prev = $('More Pages?').isExecuted ? $('More Pages?').first().json : $('Start SLA Check').first().json;\nconst { cfg } = prev;\n// n8n cuts a thrown message at \": \", so these messages avoid that pattern.\nconst describe = errs => errs.map(e => `${e.extensions?.code || 'error'} (${String(e.message).replace(/:\\s/g, ' - ')})`).join('; ').slice(0, 500);\n// GraphQL errors arrive with HTTP 200. Failing here ends the run and the error workflow reports it.\nif (Array.isArray(res.errors) && res.errors.length) throw new Error(`Monday refused the SLA query. ${describe(res.errors)}. No reminders were sent; the next run tries again.`);\nconst page = res.data?.items_page_by_column_values || res.data?.next_items_page;\nif (!page || !Array.isArray(page.items)) throw new Error(`Monday sent an unexpected SLA response. ${JSON.stringify(res).slice(0, 300).replace(/:\\s/g, ' - ')}`);\n\nconst parse = s => { try { return s ? JSON.parse(s) : null; } catch (e) { return null; } };\nconst slim = it => {\n  const cv = Object.fromEntries((it.column_values || []).map(c => [c.id, c]));\n  const ownerV = parse(cv[cfg.col.owner]?.value);\n  return {\n    id: String(it.id), name: it.name, url: it.url, createdAt: it.created_at || '', status: cv[cfg.col.status]?.text || '',\n    ownerIds: (ownerV?.personsAndTeams || []).filter(p => p.kind === 'person').map(p => String(p.id)),\n    ownerText: cv[cfg.col.owner]?.text || '',\n  };\n};\nconst pageNo = prev.page + 1;\nconst more = Boolean(page.cursor) && pageNo < cfg.maxPages;\nreturn [{\n  json: {\n    cfg, page: pageNo, items: [...prev.items, ...page.items.map(slim)], more, complete: !page.cursor,\n    request: more ? {\n      query: 'query NextLeads($cursor: String!, $limit: Int!, $cols: [String!]) { next_items_page(cursor: $cursor, limit: $limit) { cursor items { id name url created_at column_values(ids: $cols) { id text value } } } }',\n      variables: { cursor: page.cursor, limit: cfg.pageSize, cols: [cfg.col.status, cfg.col.owner] },\n    } : null,\n  },\n  pairedItem: { item: 0 },\n}];\n"
+      }
+    },
+    {
+      "id": "b1c70068-14f2-54ac-842c-079e8c985f7c",
+      "name": "More Pages?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1380,
+        1400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "d12035b9-93a7-5297-a82b-abbebedb4868",
+              "leftValue": "={{ $json.more }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "8bc9d989-cc28-5c5e-9f6c-dc8c307c9709",
+      "name": "Find Overdue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        1400
+      ],
+      "parameters": {
+        "jsCode": "// Decides who to remind. After SLA_HOURS the owner gets one nudge; after twice SLA_HOURS the manager gets one\n// escalation. Static data remembers what was sent, so a lead is never nudged or escalated twice.\n// One message per person, listing all of their leads, keeps Slack quiet and inside its rate limit.\nconst store = $getWorkflowStaticData('global');\nconst { cfg, items, complete } = $input.first().json;\nconst H = 3600e3, now = Date.now(), sla = cfg.slaHours;\nconst esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst hours = ms => (ms / H).toFixed(1);\nstore.sla = store.sla || {};\n\nconst live = new Map();\nfor (const it of items) if (it.status === cfg.newLabel) live.set(it.id, it); // double-check the label, drop repeats\n// Leads that left \"New\" are forgotten (only when the full list was read).\nif (complete) for (const id of Object.keys(store.sla)) if (!live.has(id)) delete store.sla[id];\n\nconst groups = new Map();\nconst add = (key, base, id, line) => {\n  if (!groups.has(key)) groups.set(key, { ...base, itemIds: [], lines: [] });\n  groups.get(key).itemIds.push(id);\n  groups.get(key).lines.push(line);\n};\nfor (const it of live.values()) {\n  const age = now - Date.parse(it.createdAt);\n  if (!(age >= sla * H)) continue; // also skips items without a readable creation time\n  const rec = store.sla[it.id] || {};\n  const owner = cfg.owners.find(o => it.ownerIds.includes(o.mondayUserId)) || null;\n  const ownerLabel = !owner ? esc(it.ownerText) || 'nobody'\n    : owner.away ? `${esc(owner.name)} (away)` : owner.slackMemberId ? `<@${owner.slackMemberId}>` : esc(owner.name);\n  const link = `<${it.url}|${esc(it.name)}>`;\n  if (age >= 2 * sla * H) {\n    if (!rec.escalatedAt) add('manager', { kind: 'escalate', webhookUrl: cfg.managerHook }, it.id, `${link}, owner ${ownerLabel}, waiting ${hours(age)} h`);\n  } else if (!rec.nudgedAt) {\n    // Nudge the owner directly. Without an owner who can act (none, not in OWNERS_JSON, or away), ask the team channel.\n    if (owner && !owner.away) add(`owner:${owner.mondayUserId}`, { kind: 'nudge', webhookUrl: owner.slackWebhookUrl || cfg.team, mention: ownerLabel }, it.id, `${link}, waiting ${hours(age)} h`);\n    else add('team', { kind: 'nudge', webhookUrl: cfg.team, mention: '' }, it.id, `${link}, owner ${ownerLabel}, waiting ${hours(age)} h`);\n  }\n}\n\nconst out = [];\nfor (const [key, g] of groups) {\n  const n = g.lines.length;\n  let head;\n  if (g.kind === 'escalate') {\n    head = `${cfg.managerId ? `<@${cfg.managerId}> ` : ''}*SLA missed:* ${n === 1 ? '1 lead is' : `${n} leads are`} still New after more than ${2 * sla} h.`;\n  } else if (key === 'team') {\n    head = `*${n === 1 ? '1 lead needs' : `${n} leads need`} an owner.* Still New after more than ${sla} h, and the owner is missing, not in OWNERS_JSON or away:`;\n  } else {\n    head = `${g.mention} ${n === 1 ? 'This lead is' : `These ${n} leads are`} still New after more than ${sla} h. Please reach out:`;\n  }\n  out.push({ json: { kind: g.kind, webhookUrl: g.webhookUrl, itemIds: g.itemIds, text: [head, ...g.lines.map(l => `- ${l}`)].join('\\n') }, pairedItem: { item: 0 } });\n}\nreturn out; // nothing overdue: the run ends here\n"
+      }
+    },
+    {
+      "id": "98eab88c-cd1b-50e8-b57c-dbcdb984f507",
+      "name": "Each Alert",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1880,
+        1400
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "d6e84e7d-b8e1-5cc4-afc1-20cc4b663eab",
+      "name": "Slack: SLA Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2100,
+        1620
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.webhookUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "b63d6139-cd3a-57fc-ac24-6acdb6506a71",
+      "name": "Mark Alerted",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        1620
+      ],
+      "parameters": {
+        "jsCode": "// Slack accepted this alert, so its leads are remembered. A refused alert skips this node and is sent\n// again on the next run.\nconst store = $getWorkflowStaticData('global');\nstore.sla = store.sla || {};\nconst alert = $('Each Alert').itemMatching(0).json;\nconst now = new Date().toISOString();\nfor (const id of alert.itemIds) {\n  const rec = store.sla[id] || (store.sla[id] = {});\n  if (alert.kind === 'escalate') { rec.escalatedAt = now; rec.nudgedAt = rec.nudgedAt || now; }\n  else rec.nudgedAt = now;\n}\nreturn [{ json: { sent: true, kind: alert.kind, itemIds: alert.itemIds }, pairedItem: { item: 0 } }];\n"
+      }
+    },
+    {
+      "id": "1e63d684-d99f-5aa4-9589-8056dde375eb",
+      "name": "All Sent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2100,
+        1400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "ad15009d-ed15-55ad-9634-99cd18ea10a2",
+              "leftValue": "={{ $json.sent === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "cee8eca1-a356-5d0d-8436-2e2cf14d29b5",
+      "name": "Stop: SLA Alert Failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        2320,
+        1400
+      ],
+      "parameters": {
+        "errorMessage": "={{ 'Slack refused ' + $input.all().length + ' SLA alert(s). They are sent again on the next run. ' + $input.all().map(i => i.json.error?.message || 'Unknown error').join(' | ') }}"
+      }
+    }
+  ],
+  "connections": {
+    "Lead Webhook": {
+      "main": [
+        [
+          {
+            "node": "Secret Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Secret Valid?": {
+      "main": [
+        [
+          {
+            "node": "Normalize Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond: Unauthorized": {
+      "main": [
+        [
+          {
+            "node": "Stop: Bad Secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Lead": {
+      "main": [
+        [
+          {
+            "node": "Config OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config OK?": {
+      "main": [
+        [
+          {
+            "node": "Lead Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Try Later",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Valid?": {
+      "main": [
+        [
+          {
+            "node": "New Submission?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Invalid Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Submission?": {
+      "main": [
+        [
+          {
+            "node": "Monday: Find Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monday: Find Lead": {
+      "main": [
+        [
+          {
+            "node": "Match Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Try Later",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Lead": {
+      "main": [
+        [
+          {
+            "node": "Search OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search OK?": {
+      "main": [
+        [
+          {
+            "node": "Lead Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Try Later",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Exists?": {
+      "main": [
+        [
+          {
+            "node": "Build Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pick Owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Update": {
+      "main": [
+        [
+          {
+            "node": "Monday: Update Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monday: Update Lead": {
+      "main": [
+        [
+          {
+            "node": "Check Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Try Later",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Update": {
+      "main": [
+        [
+          {
+            "node": "Saved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Owner": {
+      "main": [
+        [
+          {
+            "node": "Monday: Create Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monday: Create Lead": {
+      "main": [
+        [
+          {
+            "node": "Check Create",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Try Later",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Create": {
+      "main": [
+        [
+          {
+            "node": "Contact Refused?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contact Refused?": {
+      "main": [
+        [
+          {
+            "node": "Monday: Retry Create",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Saved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monday: Retry Create": {
+      "main": [
+        [
+          {
+            "node": "Check Retry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Try Later",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Retry": {
+      "main": [
+        [
+          {
+            "node": "Saved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Saved?": {
+      "main": [
+        [
+          {
+            "node": "Respond: Saved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Try Later",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond: Try Later": {
+      "main": [
+        [
+          {
+            "node": "Note Failed Try",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Note Failed Try": {
+      "main": [
+        [
+          {
+            "node": "Stop: Lead Not Saved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond: Saved": {
+      "main": [
+        [
+          {
+            "node": "Remember Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remember Lead": {
+      "main": [
+        [
+          {
+            "node": "Build Owner Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Owner Alert": {
+      "main": [
+        [
+          {
+            "node": "Slack: Notify Owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: Notify Owner": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Stop: Notify Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 30 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Start SLA Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Now": {
+      "main": [
+        [
+          {
+            "node": "Run Secret Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Secret Valid?": {
+      "main": [
+        [
+          {
+            "node": "Respond: Run Started",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Run Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond: Run Unauthorized": {
+      "main": [
+        [
+          {
+            "node": "Stop: Bad Run Secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond: Run Started": {
+      "main": [
+        [
+          {
+            "node": "Start SLA Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start SLA Check": {
+      "main": [
+        [
+          {
+            "node": "Monday: Get New Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monday: Get New Leads": {
+      "main": [
+        [
+          {
+            "node": "Collect Page",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop: SLA Query Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Page": {
+      "main": [
+        [
+          {
+            "node": "More Pages?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "More Pages?": {
+      "main": [
+        [
+          {
+            "node": "Monday: Get New Leads",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Find Overdue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Overdue": {
+      "main": [
+        [
+          {
+            "node": "Each Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Each Alert": {
+      "main": [
+        [
+          {
+            "node": "All Sent?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: SLA Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: SLA Alert": {
+      "main": [
+        [
+          {
+            "node": "Mark Alerted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Each Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Alerted": {
+      "main": [
+        [
+          {
+            "node": "Each Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "All Sent?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Stop: SLA Alert Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
